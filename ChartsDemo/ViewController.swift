@@ -38,7 +38,7 @@ class ViewController: UIViewController {
     }
     
     weak var axisFormatDelegate: IAxisValueFormatter?
-    
+
     private lazy var priceLabel: UILabel = {
         let label = UILabel()
         label.font = .preferredFont(forTextStyle: .title2)
@@ -79,6 +79,7 @@ class ViewController: UIViewController {
     }()
     
     var stockData: StockData?
+    var currentStockEntries: [StockEntry] = []
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -110,10 +111,12 @@ private extension ViewController {
     
     func setChartData(for timePeriod: TimePeriod) {
         guard let stockData = stockData else { return }
-        let chartDataPoints = timePeriod.stockEntries(from: stockData)
-        let set = LineChartDataSet(entries: chartDataPoints.map({ ChartDataEntry(x: $0.x, y: $0.y, data: $0) }))
+        currentStockEntries = timePeriod.stockEntries(from: stockData)
+        let set = LineChartDataSet(entries: currentStockEntries.map({ ChartDataEntry(x: $0.x, y: $0.y, data: $0) }))
         set.mode = .cubicBezier
-        set.drawCirclesEnabled = false
+        set.drawCirclesEnabled = true
+        set.circleColors = [.clear]
+        set.drawCircleHoleEnabled = false
         set.lineWidth = 2
         set.setColor(.green)
         set.fill = Fill(color: .green)
@@ -123,16 +126,22 @@ private extension ViewController {
         data.setDrawValues(false)
         lineChartView.data = data
         
-        updatePriceLabel(with: chartDataPoints.last?.price ?? "Error")
-        
-        if #available(iOS 15, *) {
-            setAudioChart(for: chartDataPoints)
-        }
+        updatePriceLabel(with: currentStockEntries.last?.price ?? "Error")
     }
     
-    @available(iOS 15, *)
-    func setAudioChart(for stockEntries: [StockEntry]) {
-        let audioDataPoints = stockEntries.map({ AXDataPoint(x: $0.x, y: $0.y) })
+    func updateAccessibilityFrames() {
+        if let elements = lineChartView.accessibilityChildren() as? [NSUIAccessibilityElement] {
+            let chartContentRect = lineChartView.contentRect
+            elements.forEach({
+                let oldFrame = $0.accessibilityFrame
+                $0.accessibilityFrame = CGRect(
+                    x: oldFrame.origin.x,
+                    y: chartContentRect.origin.y,
+                    width: oldFrame.width,
+                    height: chartContentRect.height
+                )
+            })
+        }
     }
     
     func updatePriceLabel(with price: String) {
@@ -192,4 +201,67 @@ extension ViewController: IAxisValueFormatter {
 }
 
 //@available(iOS 15, *)
-//extension ViewController: AXChart {}
+//extension LineChartView: AXChart {
+//    
+//    public var accessibilityChartDescriptor: AXChartDescriptor? {
+//        get {
+//            guard let set = data?.dataSets.first else { return nil }
+//            return makeAccessibilityChartDescriptor(for: set)
+//        }
+//        set {}
+//    }
+//    
+//    
+//    private func makeAccessibilityChartDescriptor(for dataSet: IChartDataSet) -> AXChartDescriptor? {
+//        let audioDataPoints = dataSet.map({ AXDataPoint(x: $0., y: $0.y) })
+//        let series = AXDataSeriesDescriptor(
+//            name: "Apple share price",
+//            isContinuous: false,
+//            dataPoints: audioDataPoints
+//        )
+//
+//        guard let firstX = stockEntries.first?.x, let lastX = stockEntries.last?.x else { return nil }
+//        let dateAxisDescriptor = AXNumericDataAxisDescriptor(
+//            title: "Date",
+//            range: firstX...lastX,
+//            gridlinePositions: []) { xValue in
+//                let date = Date(timeIntervalSince1970: xValue)
+//                let dateFormatter = DateFormatter()
+//                dateFormatter.dateFormat = "dd MMMM yyyy"
+//                return dateFormatter.string(from: date)
+//            }
+//        
+//        let priceSortedList = stockEntries.sorted(by: { ($0.price < $1.price) })
+//        guard let firstY = priceSortedList.first?.y, let lastY = priceSortedList.last?.y else { return nil }
+//        let priceAxisDescriptor = AXNumericDataAxisDescriptor(
+//            title: "Share price",
+//            range: firstY...lastY,
+//            gridlinePositions: []) { yValue in
+//                let formatter = NumberFormatter()
+//                formatter.locale = Locale.current
+//                formatter.numberStyle = .currency
+//                return formatter.string(from: yValue as NSNumber) ?? ""
+//            }
+//        
+//        let title = "Apple share price"
+//        let summary = "The chart shows the apple share price at each date"
+//        
+//        return AXChartDescriptor(
+//            title: title,
+//            summary: summary,
+//            xAxis: dateAxisDescriptor,
+//            yAxis: priceAxisDescriptor,
+//            additionalAxes: [],
+//            series: [series]
+//        )
+//    }
+//}
+//
+//extension LineChartView {
+//    open override var accessibilityContainerType: UIAccessibilityContainerType {
+//        get {
+//            return .semanticGroup
+//        }
+//        set {}
+//    }
+//}
